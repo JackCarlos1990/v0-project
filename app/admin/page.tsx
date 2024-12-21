@@ -1,23 +1,42 @@
-export default function AdminDashboard() {
+import { kv } from '@vercel/kv'
+
+export default async function AdminDashboard() {
+  const userCount = await kv.llen('users')
+  const announcementCount = await kv.llen('announcements')
+  const recentAnnouncements = await kv.lrange('announcements', 0, 4)
+
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h1 className="text-2xl font-semibold mb-4">管理員儀表板</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="border rounded-lg p-4">
-          <h2 className="text-lg font-medium mb-2">用戶管理</h2>
-          <p className="text-gray-600">管理系統用戶，包括添加、刪除和修改用戶信息。</p>
-          <a href="/admin/users" className="mt-4 inline-block text-blue-500 hover:text-blue-600">
-            進入用戶管理 →
-          </a>
+    <div>
+      <h1 className="text-2xl font-semibold mb-6">管理員儀表板</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-2">用戶統計</h2>
+          <p className="text-3xl font-bold">{userCount}</p>
+          <p className="text-gray-500">總用戶數</p>
         </div>
-        <div className="border rounded-lg p-4">
-          <h2 className="text-lg font-medium mb-2">公告管理</h2>
-          <p className="text-gray-600">管理系統公告，發布新公告或修改現有公告。</p>
-          <a href="/admin/announcements" className="mt-4 inline-block text-blue-500 hover:text-blue-600">
-            進入公告管理 →
-          </a>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-2">公告統計</h2>
+          <p className="text-3xl font-bold">{announcementCount}</p>
+          <p className="text-gray-500">總公告數</p>
         </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-lg font-semibold mb-4">最近公告</h2>
+        {recentAnnouncements.length > 0 ? (
+          <ul className="space-y-2">
+            {recentAnnouncements.map((announcement, index) => (
+              <li key={index} className="border-b pb-2 last:border-b-0">
+                {announcement}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500">暫無公告</p>
+        )}
       </div>
     </div>
   )
 }
+
