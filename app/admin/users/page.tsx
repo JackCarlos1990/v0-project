@@ -3,55 +3,70 @@
 import { useState, useEffect } from 'react'
 import { kv } from '@vercel/kv'
 
+interface User {
+  name: string
+  email: string
+}
+
 export default function UserManagement() {
-  const [users, setUsers] = useState([])
-  const [newUser, setNewUser] = useState({ name: '', email: '' })
+  const [users, setUsers] = useState<User[]>([])
+  const [newUser, setNewUser] = useState<User>({ name: '', email: '' })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
   }, [])
 
   async function fetchUsers() {
+    setIsLoading(true)
+    setError(null)
     try {
       const userList = await kv.lrange('users', 0, -1)
-      setUsers(userList || [])
-    } catch (error) {
-      console.error('Error fetching users:', error)
+      setUsers(userList.map(user => JSON.parse(user)))
+    } catch (err) {
+      setError('Failed to fetch users. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  async function addUser(e) {
+  async function addUser(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
     try {
       await kv.rpush('users', JSON.stringify(newUser))
       setNewUser({ name: '', email: '' })
-      fetchUsers()
-    } catch (error) {
-      console.error('Error adding user:', error)
+      await fetchUsers()
+    } catch (err) {
+      setError('Failed to add user. Please try again.')
     }
   }
 
-  async function deleteUser(index) {
+  async function deleteUser(index: number) {
+    setError(null)
     try {
-      await kv.lrem('users', 1, users[index])
-      fetchUsers()
-    } catch (error) {
-      console.error('Error deleting user:', error)
+      await kv.lrem('users', 1, JSON.stringify(users[index]))
+      await fetchUsers()
+    } catch (err) {
+      setError('Failed to delete user. Please try again.')
     }
   }
+
+  if (isLoading) return <div className="text-center">Loading...</div>
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div>
       <h1 className="text-2xl font-semibold mb-6">用戶管理</h1>
       
-      <form onSubmit={addUser} className="mb-8">
+      <form onSubmit={addUser} className="mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <input
             type="text"
             placeholder="名稱"
             value={newUser.name}
             onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-            className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-grow p-2 border rounded"
             required
           />
           <input
@@ -59,48 +74,38 @@ export default function UserManagement() {
             placeholder="電子郵件"
             value={newUser.email}
             onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-            className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-grow p-2 border rounded"
             required
           />
-          <button 
-            type="submit" 
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
+          <button type="submit" className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition-colors">
             添加用戶
           </button>
         </div>
       </form>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名稱</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">電子郵件</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {users.map((user, index) => {
-              const { name, email } = JSON.parse(user)
-              return (
-                <tr key={index}>
-                  <td className="px-6 py-4 whitespace-nowrap">{name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => deleteUser(index)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      刪除
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+
+      {users.length > 0 ? (
+        <ul className="bg-white shadow rounded-lg divide-y">
+          {users.map((user, index) => (
+            <li key={index} className="flex items-center justify-between p-4">
+              <div>
+                <p className="font-semibold">{user.name}</p>
+                <p className="text-gray-500">{user.email}</p>
+              </div>
+              <button
+                onClick={() => deleteUser(index)}
+                className="bg-red-500 text-white p-2 rounded hover:bg-red-600 transition-colors"
+              >
+                刪除
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-center text-gray-500">目前沒有用戶。</p>
+      )}
     </div>
   )
 }
+
