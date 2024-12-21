@@ -3,79 +3,114 @@
 import { useState, useEffect } from 'react'
 import { kv } from '@vercel/kv'
 
+interface Announcement {
+  id: string
+  content: string
+  createdAt: string
+}
+
 export default function AnnouncementManagement() {
-  const [announcements, setAnnouncements] = useState([])
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [newAnnouncement, setNewAnnouncement] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAnnouncements()
   }, [])
 
   async function fetchAnnouncements() {
+    setIsLoading(true)
+    setError(null)
     try {
       const announcementList = await kv.lrange('announcements', 0, -1)
-      setAnnouncements(announcementList || [])
-    } catch (error) {
-      console.error('Error fetching announcements:', error)
+      setAnnouncements(announcementList.map(item => JSON.parse(item)))
+    } catch (err) {
+      setError('Failed to fetch announcements. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  async function addAnnouncement(e) {
+  async function addAnnouncement(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
+    if (!newAnnouncement.trim()) {
+      setError('Announcement content cannot be empty.')
+      return
+    }
     try {
-      await kv.rpush('announcements', newAnnouncement)
+      const announcement: Announcement = {
+        id: Date.now().toString(),
+        content: newAnnouncement,
+        createdAt: new Date().toISOString()
+      }
+      await kv.rpush('announcements', JSON.stringify(announcement))
       setNewAnnouncement('')
-      fetchAnnouncements()
-    } catch (error) {
-      console.error('Error adding announcement:', error)
+      await fetchAnnouncements()
+    } catch (err) {
+      setError('Failed to add announcement. Please try again.')
     }
   }
 
-  async function deleteAnnouncement(index) {
+  async function deleteAnnouncement(id: string) {
+    setError(null)
     try {
-      await kv.lrem('announcements', 1, announcements[index])
-      fetchAnnouncements()
-    } catch (error) {
-      console.error('Error deleting announcement:', error)
+      const index = announcements.findIndex(a => a.id === id)
+      if (index !== -1) {
+        await kv.lrem('announcements', 1, JSON.stringify(announcements[index]))
+        await fetchAnnouncements()
+      }
+    } catch (err) {
+      setError('Failed to delete announcement. Please try again.')
     }
   }
+
+  if (isLoading) return <div className="text-center">Loading...</div>
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div>
       <h1 className="text-2xl font-semibold mb-6">公告管理</h1>
       
-      <form onSubmit={addAnnouncement} className="mb-8">
+      <form onSubmit={addAnnouncement} className="mb-6">
         <div className="flex flex-col md:flex-row gap-4">
-          <input
-            type="text"
+          <textarea
             placeholder="新公告內容"
             value={newAnnouncement}
             onChange={(e) => setNewAnnouncement(e.target.value)}
-            className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-grow p-2 border rounded resize-none"
+            rows={3}
             required
           />
-          <button 
-            type="submit" 
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            發布公告
+          <button type="submit" className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition-colors">
+            添加公告
           </button>
         </div>
       </form>
 
-      <div className="space-y-4">
-        {announcements.map((announcement, index) => (
-          <div key={index} className="flex items-center justify-between p-4 border rounded">
-            <p className="flex-1">{announcement}</p>
-            <button
-              onClick={() => deleteAnnouncement(index)}
-              className="ml-4 text-red-600 hover:text-red-900"
-            >
-              刪除
-            </button>
-          </div>
-        ))}
-      </div>
+      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+
+      {announcements.length > 0 ? (
+        <ul className="bg-white shadow rounded-lg divide-y">
+          {announcements.map((announcement) => (
+            <li key={announcement.id} className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <p className="font-semibold">{new Date(announcement.createdAt).toLocaleString()}</p>
+                <button
+                  onClick={() => deleteAnnouncement(announcement.id)}
+                  className="bg-red-500 text-white p-2 rounded hover:bg-red-600 transition-colors"
+                >
+                  刪除
+                </button>
+              </div>
+              <p className="text-gray-700 whitespace-pre-wrap">{announcement.content}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-center text-gray-500">目前沒有公告。</p>
+      )}
     </div>
   )
 }
+
